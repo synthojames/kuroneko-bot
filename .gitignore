@@ -3,6 +3,9 @@
 .env.local
 .env.production
 
+#old files
+botbackupolddb.js
+
 # Database files
 *.db
 *.db-journal

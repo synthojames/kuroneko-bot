@@ -14,7 +14,6 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, // Can see what servers its in
         GatewayIntentBits.GuildMessages, //Can see messages in server
-        GatewayIntentBits.GuildMembers //Can see members in server
     ]
 });
 

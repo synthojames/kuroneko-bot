@@ -391,8 +391,15 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
-                const isAdmin = interaction.guild.ownerId === interaction.user.id || 
-                               interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator);
+                let isAdmin = false;
+                try {
+                    isAdmin = interaction.guild.ownerId === interaction.user.id || 
+                             (interaction.member && interaction.member.permissions && 
+                              typeof interaction.member.permissions.has === 'function' &&
+                              interaction.member.permissions.has(PermissionFlagsBits.Administrator));
+                } catch (error) {
+                    console.error('Permission check error:', error);
+                }
                 if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an administrator, and thus can not set this up',
@@ -479,8 +486,15 @@ client.on('interactionCreate', async interaction =>{
             //list all bdays
             if(subcommand == 'list') {
                 //admin check
-                const isAdmin = interaction.guild.ownerId === interaction.user.id || 
-                               interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator);
+                let isAdmin = false;
+                try {
+                    isAdmin = interaction.guild.ownerId === interaction.user.id || 
+                             (interaction.member && interaction.member.permissions && 
+                              typeof interaction.member.permissions.has === 'function' &&
+                              interaction.member.permissions.has(PermissionFlagsBits.Administrator));
+                } catch (error) {
+                    console.error('Permission check error:', error);
+                }
                 if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an admin',
@@ -521,8 +535,15 @@ client.on('interactionCreate', async interaction =>{
 
             //manual check of birthdays
             if(subcommand == 'check'){
-                const isAdmin = interaction.guild.ownerId === interaction.user.id || 
-                               interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator);
+                let isAdmin = false;
+                try {
+                    isAdmin = interaction.guild.ownerId === interaction.user.id || 
+                             (interaction.member && interaction.member.permissions && 
+                              typeof interaction.member.permissions.has === 'function' &&
+                              interaction.member.permissions.has(PermissionFlagsBits.Administrator));
+                } catch (error) {
+                    console.error('Permission check error:', error);
+                }
                 if(!isAdmin) {
                     await interaction.reply({
                         content: 'You are not an admin',
@@ -590,8 +611,15 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
             if(subcommand == "stats") {
-                const isAdmin = interaction.guild.ownerId === interaction.user.id || 
-                               interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator);
+                let isAdmin = false;
+                try {
+                    isAdmin = interaction.guild.ownerId === interaction.user.id || 
+                             (interaction.member && interaction.member.permissions && 
+                              typeof interaction.member.permissions.has === 'function' &&
+                              interaction.member.permissions.has(PermissionFlagsBits.Administrator));
+                } catch (error) {
+                    console.error('Permission check error:', error);
+                }
                 if(!isAdmin) {
                     await interaction.reply({
                             content: 'You are not an admin',

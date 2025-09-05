@@ -103,7 +103,9 @@ function checkAdminPermission(interaction, debug = false) {
         let hasAdminViaMember = false;
         if (interaction.member?.permissions) {
             try {
-                hasAdminViaMember = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+                if (typeof interaction.member.permissions.has === 'function') {
+                    hasAdminViaMember = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+                }
             } catch (e) {
                 if (debug) console.log('Member permissions check failed:', e.message);
             }

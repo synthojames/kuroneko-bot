@@ -391,13 +391,26 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
+                // Debug logging
+                console.log('Setup command triggered');
+                console.log('interaction.guild:', interaction.guild);
+                console.log('interaction.guildId:', interaction.guildId);
+                console.log('interaction.inGuild():', interaction.inGuild());
+                console.log('interaction.member:', interaction.member);
+                console.log('interaction.memberPermissions:', interaction.memberPermissions);
+
                 // Ensure command is used in a guild
-                if(!interaction.guild){
+                if(!interaction.guildId){
                     await interaction.reply({
                         content: 'This command can only be used in a server',
                         ephemeral: true
                     });
                     return;
+                }
+
+                // Fetch guild if not cached
+                if(!interaction.guild){
+                    await interaction.client.guilds.fetch(interaction.guildId);
                 }
 
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||

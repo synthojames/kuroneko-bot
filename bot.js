@@ -450,14 +450,16 @@ client.on('interactionCreate', async interaction =>{
                         .setTimestamp();
                     await interaction.reply({embeds: [setupEmbed]});
 
-                    console.log(`Setup completed for server: ${interaction.guild.name}`);
+                    console.log(`Setup completed for server: ${serverName}`);
 
                 } catch(error) {
-                    console.log(`Error in setting up birthday notifications:`, error);
-                    await interaction.reply({
-                        content: 'Sorry somethign went wrong, try again soon',
-                        ephemeral:true
-                    });
+                    console.error(`Error in setting up birthday notifications:`, error);
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: 'Sorry something went wrong, try again soon',
+                            ephemeral:true
+                        });
+                    }
                 }
             }
 

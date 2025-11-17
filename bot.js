@@ -391,15 +391,8 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
-                // Debug logging
-                console.log('Setup command - User:', interaction.user.username);
-                console.log('Has Administrator?', interaction.member?.permissions?.has(PermissionFlagsBits.Administrator));
-                console.log('Has ManageGuild?', interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild));
-                console.log('Member object exists?', !!interaction.member);
-                console.log('Permissions object exists?', !!interaction.member?.permissions);
-
-                const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an administrator, and thus can not set this up',
@@ -486,8 +479,8 @@ client.on('interactionCreate', async interaction =>{
             //list all bdays
             if(subcommand == 'list') {
                 //admin check
-                const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an admin',
@@ -528,8 +521,8 @@ client.on('interactionCreate', async interaction =>{
 
             //manual check of birthdays
             if(subcommand == 'check'){
-                const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin) {
                     await interaction.reply({
                         content: 'You are not an admin',
@@ -597,8 +590,8 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
             if(subcommand == "stats") {
-                const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.member?.permissions?.has(PermissionFlagsBits.ManageGuild);
+                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin) {
                     await interaction.reply({
                             content: 'You are not an admin',

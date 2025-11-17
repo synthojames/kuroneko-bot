@@ -3,13 +3,42 @@ require('dotenv').config();
 // import discord.js
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 //require filesystem
-const fs = require('fs'); 
+const fs = require('fs');
 //require cron
 const cron = require('node-cron');
-//require sqlite3 for db
+//require sqlite3 for birthdayDatabase
 const Database = require('better-sqlite3');
 
-//Creat the bot :D
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Discord Embed Colors
+const EMBED_COLORS = {
+    SUCCESS: 0x00FF00,      // Green - for successful operations
+    ERROR: 0xFF0000,        // Red - for errors and failures
+    INFO: 0x00AE86,         // Teal - for informational messages
+    WARNING: 0xFFAA00,      // Orange - for warnings
+    BIRTHDAY: 0xFF69B4      // Pink - for birthday celebrations
+};
+
+// Date and Time Configuration
+const DAYS_IN_EACH_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; // Includes leap year Feb 29
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAILY_BIRTHDAY_CHECK_SCHEDULE = '0 9 * * *'; // Cron format: Every day at 9:00 AM
+const BIRTHDAY_CHECK_TIME_DISPLAY = 'Everyday at 9:00 AM JST'; // Human-readable format for users
+
+// Database Configuration
+const DATABASE_FILE_PATH = './birthdays.birthdayDatabase';
+
+// Discord API Configuration
+const DISCORD_API_VERSION = '10';
+
+// ============================================================================
+// BOT SETUP
+// ============================================================================
+
+// Create the bot :D
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, // Can see what servers its in
@@ -18,19 +47,28 @@ const client = new Client({
     ]
 });
 
-//DATABASE SETUP
-const DB_FILE = './birthdays.db';
-let db;
+// ============================================================================
+// DATABASE SETUP
+// ============================================================================
 
-//Initialize DB
+let birthdayDatabase;
+
+/**
+ * Initializes the birthday database connection and creates necessary tables
+ * Sets up foreign key constraints and ensures all tables exist
+ */
 function initializeDB() {
     console.log('Initializing the database');
-    db = new Database(DB_FILE);
-    db.pragma('foreign_keys = ON');
+    birthdayDatabase = new Database(DATABASE_FILE_PATH);
+    birthdayDatabase.pragma('foreign_keys = ON');
     createTables();
     console.log('Database Initialized')
 }
-//Create the DB tables
+/**
+ * Creates all necessary database tables if they don't exist
+ * Tables: users, servers, birthday_messages
+ * Also creates indexes for performance optimization
+ */
 function createTables() {
     //USERS TABLE
     const createUsersTable = `
@@ -71,95 +109,178 @@ function createTables() {
     `;
 
     //create the tables
-    db.exec(createUsersTable);
-    db.exec(createServersTable);
-    db.exec(createMessagesTable);
+    birthdayDatabase.exec(createUsersTable);
+    birthdayDatabase.exec(createServersTable);
+    birthdayDatabase.exec(createMessagesTable);
 
     //indexing for performance
-    db.exec('CREATE INDEX IF NOT EXISTS idx_users_birthday ON users(month, day)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_date ON birthday_messages(sent_at)');
+    birthdayDatabase.exec('CREATE INDEX IF NOT EXISTS idx_users_birthday ON users(month, day)');
+    birthdayDatabase.exec('CREATE INDEX IF NOT EXISTS idx_messages_date ON birthday_messages(sent_at)');
 
     console.log('Database tables created and/or verified');
 
 }
 
-//read from db old
+// ============================================================================
+// DATABASE FUNCTIONS - User Birthdays
+// ============================================================================
 
-//Get birthday
+/**
+ * Retrieves a user's birthday information from the database
+ * @param {string} userID - Discord user ID
+ * @returns {Object|undefined} User birthday record or undefined if not found
+ */
 function getUserBirthday(userID){
-    const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
+    const stmt = birthdayDatabase.prepare('SELECT * FROM users WHERE id = ?');
     return stmt.get(userID);
 }
-//Save Birthday
+
+/**
+ * Saves or updates a user's birthday in the database
+ * @param {string} userID - Discord user ID
+ * @param {string} username - Discord username
+ * @param {number} month - Birth month (1-12)
+ * @param {number} day - Birth day (1-31)
+ * @returns {Object} Database execution result
+ */
 function saveUserBirthday(userID, username, month, day){
-    const stmt = db.prepare(`
+    const stmt = birthdayDatabase.prepare(`
         INSERT OR REPLACE INTO users (id, username, month, day, updated_at)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
-    return stmt.run(userID, username, month, day);   
+    return stmt.run(userID, username, month, day);
 }
-//Remove Birthday
+
+/**
+ * Removes a user's birthday from the database
+ * @param {string} userID - Discord user ID
+ * @returns {Object} Database execution result with changes count
+ */
 function removeUserBirthday(userID){
-    const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+    const stmt = birthdayDatabase.prepare('DELETE FROM users WHERE id = ?');
     return stmt.run(userID);
 }
-//Get todays birthdays
+
+/**
+ * Gets all users who have a birthday on a specific date
+ * @param {number} month - Month (1-12)
+ * @param {number} day - Day (1-31)
+ * @returns {Array} Array of user records with birthdays on that date
+ */
 function getUsersWithBirthday(month, day){
-    const stmt = db.prepare('SELECT * FROM users WHERE month = ? AND day = ?');
+    const stmt = birthdayDatabase.prepare('SELECT * FROM users WHERE month = ? AND day = ?');
     return stmt.all(month,day);
 }
+
+/**
+ * Retrieves all birthdays from the database, sorted by date
+ * @returns {Array} Array of all user birthday records
+ */
 function getAllBirthdays(){
-    const stmt = db.prepare('SELECT * FROM users ORDER BY month, day');
+    const stmt = birthdayDatabase.prepare('SELECT * FROM users ORDER BY month, day');
     return stmt.all();
 }
-//Save Serve Configuration
+// ============================================================================
+// DATABASE FUNCTIONS - Server Configuration
+// ============================================================================
+
+/**
+ * Saves or updates a server's birthday notification configuration
+ * @param {string} serverID - Discord server (guild) ID
+ * @param {string} serverName - Name of the Discord server
+ * @param {string} channelID - Channel ID where birthday messages will be sent
+ * @param {string} roleID - Role ID to ping for birthday notifications
+ * @returns {Object} Database execution result
+ */
 function saveServerConfig(serverID, serverName, channelID, roleID) {
-    const stmt = db.prepare(`
+    const stmt = birthdayDatabase.prepare(`
         INSERT OR REPLACE INTO servers (id, server_name, channel_id, role_id, updated_at)
         VALUES (?,?,?,?, CURRENT_TIMESTAMP)
         `);
         return stmt.run(serverID, serverName, channelID, roleID);
 }
 
-//get a servers configuration
+/**
+ * Retrieves a server's birthday notification configuration
+ * @param {string} serverID - Discord server (guild) ID
+ * @returns {Object|undefined} Server configuration or undefined if not found
+ */
 function getServerConfig(serverID){
-    const stmt = db.prepare('select * FROM servers WHERE id = ?');
+    const stmt = birthdayDatabase.prepare('select * FROM servers WHERE id = ?');
     return stmt.get(serverID);
 }
 
-//Get all servers that are configured
+/**
+ * Gets all servers that have birthday notifications configured
+ * @returns {Array} Array of all server configuration records
+ */
 function getAllServerConfigs() {
-    const stmt = db.prepare('SELECT * FROM servers');
+    const stmt = birthdayDatabase.prepare('SELECT * FROM servers');
     return stmt.all();
 }
 
-//log when sent
+// ============================================================================
+// DATABASE FUNCTIONS - Birthday Message Tracking
+// ============================================================================
+
+/**
+ * Logs that a birthday message was sent to a user in a server
+ * Used to prevent sending duplicate messages
+ * @param {string} userID - Discord user ID
+ * @param {string} serverID - Discord server (guild) ID
+ * @returns {Object} Database execution result
+ */
 function logBirthdayMessage(userID, serverID){
-    const stmt = db.prepare(`
+    const stmt = birthdayDatabase.prepare(`
             INSERT INTO birthday_messages (user_id, server_id)
             VALUES (?, ?)
         `);
         return stmt.run(userID, serverID);
 }
 
-//Already sent today?
+/**
+ * Checks if a birthday message was already sent to a user in a server today
+ * Prevents duplicate birthday messages on the same day
+ * @param {string} userID - Discord user ID
+ * @param {string} serverID - Discord server (guild) ID
+ * @returns {boolean} True if message already sent today, false otherwise
+ */
 function alreadySentToday(userID, serverID) {
-    const today = new Date().toISOString().split('T')[0];
-    const stmt = db.prepare(`
+    // Extract just the date portion (YYYY-MM-DD) from ISO timestamp
+    const todayIsoDate = new Date().toISOString().split('T')[0];
+    const stmt = birthdayDatabase.prepare(`
             SELECT COUNT(*) as count
             FROM birthday_messages
             WHERE user_id = ? and server_id = ? AND DATE(sent_at) = ?
-        
+
         `);
-        const result = stmt.get(userID, serverID, today);
+        const result = stmt.get(userID, serverID, todayIsoDate);
         return result.count > 0;
 
 }
 
+// ============================================================================
+// DATE VALIDATION
+// ============================================================================
+
+/**
+ * Parses and validates a date string in MM/DD format
+ * Checks for valid month (1-12) and day (1-31) ranges
+ * Also validates that the day is valid for the given month (e.g., no Feb 30)
+ * Accounts for leap years by allowing Feb 29
+ *
+ * @param {string} dateString - Date in MM/DD format (e.g., "04/20" for April 20th)
+ * @returns {Object} Result object with:
+ *   - isValid {boolean}: Whether the date is valid
+ *   - error {string}: Error message if invalid
+ *   - month {number}: Parsed month (1-12) if valid
+ *   - day {number}: Parsed day (1-31) if valid
+ *   - format {string}: The format used ('MM/DD') if valid
+ */
 function parseAndValidateDate(dateString){
     dateString = dateString.trim();
 
-    //validate the pattern
+    // Validate the pattern matches MM/DD or M/D format
     const datePattern = /^\d{1,2}\/\d{1,2}$/;
     if (!datePattern.test(dateString)) {
         return {
@@ -168,67 +289,77 @@ function parseAndValidateDate(dateString){
         };
     }
 
-    //break up the input to validate
-    const parts = dateString.split('/');
-    const first = parseInt(parts[0]);
-    const second = parseInt(parts[1]);
+    // Split the date string and parse the parts
+    const dateParts = dateString.split('/');
+    const monthValue = parseInt(dateParts[0]);
+    const dayValue = parseInt(dateParts[1]);
 
-    //confirm both are numbers
-
-    if(isNaN(first) || isNaN(second)){
+    // Confirm both parts are valid numbers
+    if(isNaN(monthValue) || isNaN(dayValue)){
         return{
             isValid:false,
             error: "Please only use numbers."
         };
     }
-    if(first >= 1 && first <= 12 && second >= 1 && second <= 31) {
-        //now check if valid dates in month
-        const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-        if(second > daysInMonth[first -1]){
+    // Validate month and day ranges
+    if(monthValue >= 1 && monthValue <= 12 && dayValue >= 1 && dayValue <= 31) {
+        // Check if the day is valid for the given month
+        // Uses Feb 29 to account for leap years
+        if(dayValue > DAYS_IN_EACH_MONTH[monthValue - 1]){
             return{
                 isValid: false,
-                error: `${second} doesn't have ${first} days! Please recheck and try again`
+                error: `Month ${monthValue} doesn't have ${dayValue} days! Please recheck and try again`
             }
         }
         return{
             isValid: true,
-            month: first,
-            day: second,
+            month: monthValue,
+            day: dayValue,
             format: 'MM/DD'
         };
     }
+
     return{
         isValid:false,
         error: 'Invalid date, please try again'
     };
 }
 
+// ============================================================================
+// BIRTHDAY CHECKING AND CELEBRATION
+// ============================================================================
+
+/**
+ * Checks for birthdays today and sends celebration messages to all configured servers
+ * Called daily by cron schedule and on bot startup
+ * Logs detailed information about the checking process
+ */
 async function checkBirthdays(){
     console.log("Checking birthdays");
-    
+
     const today = new Date();
     const todayDay = today.getDate();
-    const todayMonth = today.getMonth() + 1;
+    const todayMonth = today.getMonth() + 1; // JavaScript months are 0-indexed, add 1 for human-readable format
 
     console.log(`Today's date is ${todayMonth}/${todayDay}`);
 
     try{
-        //get all users with bday today
-        const birthdayPeople = getUsersWithBirthday(todayMonth, todayDay);
+        // Get all users who have birthdays today
+        const usersWithBirthdaysToday = getUsersWithBirthday(todayMonth, todayDay);
 
-        if(birthdayPeople.length > 0) {
-            console.log(`There are ${birthdayPeople.length} birthdays today` );
+        if(usersWithBirthdaysToday.length > 0) {
+            console.log(`There are ${usersWithBirthdaysToday.length} birthdays today` );
 
-            //Get all servers
+            // Get all servers that have birthday notifications configured
             const servers = getAllServerConfigs();
             console.log(`Found ${servers.length} configured servers in database`);
             console.log(`Bot is currently in ${client.guilds.cache.size} servers`);
 
-            //send messages
+            // Send birthday messages to each configured server
             for(const server of servers) {
                 console.log(`Processing server: ${server.server_name} (ID: ${server.id})`);
-                await celebrateBirthday(server.id, server, birthdayPeople);
+                await celebrateBirthday(server.id, server, usersWithBirthdaysToday);
             }
         } else {
             console.log('No birthdays today.');
@@ -239,43 +370,56 @@ async function checkBirthdays(){
     }
 }
 
-async function celebrateBirthday(serverID, serverSettings, birthdayPeople){
+/**
+ * Sends birthday celebration messages to a specific server
+ * Validates that the server, channel, and role exist before sending
+ * Sends a celebratory embed for each user with a birthday
+ *
+ * @param {string} serverID - Discord server (guild) ID
+ * @param {Object} serverSettings - Server configuration from database
+ * @param {Array} usersWithBirthdaysToday - Array of users celebrating birthdays
+ */
+async function celebrateBirthday(serverID, serverSettings, usersWithBirthdaysToday){
     try{
-        //get the discord server
+        // Get the Discord server from cache
         const guild = client.guilds.cache.get(serverID);
         if (!guild) {
             console.log(`⚠️  Server "${serverSettings.server_name}" (ID: ${serverID}) not found - bot may have been removed from this server`);
             return;
         }
+
+        // Get the configured birthday channel
         const channel = guild.channels.cache.get(serverSettings.channel_id);
         if(!channel) {
             console.log(`⚠️  Channel ID ${serverSettings.channel_id} not found in ${guild.name} - channel may have been deleted`);
             return;
         }
+
+        // Get the role to ping
         const role = guild.roles.cache.get(serverSettings.role_id);
         if (!role){
             console.log(`⚠️  Role ID ${serverSettings.role_id} not found in ${guild.name} - role may have been deleted`);
             return;
         }
 
-        for (const person of birthdayPeople){
+        // Send a birthday message for each user
+        for (const birthdayUser of usersWithBirthdaysToday){
             const birthdayEmbed = new EmbedBuilder()
-                .setColor(0xFF69B4)
+                .setColor(EMBED_COLORS.BIRTHDAY)
                 .setTitle('Happy birthday!')
-                .setDescription(`It is ${person.username}'s birthday today!`)
+                .setDescription(`It is ${birthdayUser.username}'s birthday today!`)
                 .addFields(
-                    {name: 'Birthday', value: `${person.month}/${person.day}`, inline: true},
+                    {name: 'Birthday', value: `${birthdayUser.month}/${birthdayUser.day}`, inline: true},
                     {name: 'Celebration', value: `${role} Wish them a happy birthday!`, inline:true}
                 )
-                .setThumbnail('https://cdn.discordapp.com/emojis/1234567890.png') // birthday cake emoji
                 .setTimestamp();
-            
+
             await channel.send({
                 content: `<@&${serverSettings.role_id}>`,
                 embeds: [birthdayEmbed]
             });
 
-            console.log(`✅ Sent birthday message for ${person.username} to ${guild.name}/#${channel.name}`);
+            console.log(`✅ Sent birthday message for ${birthdayUser.username} to ${guild.name}/#${channel.name}`);
         }
 
     } catch (error) {
@@ -283,11 +427,29 @@ async function celebrateBirthday(serverID, serverSettings, birthdayPeople){
     }
 }
 
-//define commands
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Checks if a user has administrator permissions in a server
+ * @param {PermissionsBitField} memberPermissions - The member's permissions
+ * @returns {boolean} True if user has Administrator or ManageGuild permissions
+ */
+function isServerAdmin(memberPermissions) {
+    return memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+           memberPermissions?.has(PermissionFlagsBits.ManageGuild);
+}
+
+// ============================================================================
+// SLASH COMMAND DEFINITIONS
+// ============================================================================
+
+// Define all slash commands for the bot
 const commands = [
     new SlashCommandBuilder()
         .setName('hello')
-        .setDescription('Boy says hello to you!'),
+        .setDescription('Bot says hello to you!'),
 
     new SlashCommandBuilder()
         .setName('birthday')
@@ -347,8 +509,12 @@ const commands = [
         )
 ];
 
+/**
+ * Registers all slash commands with Discord
+ * Called once when the bot starts up
+ */
 async function registerCommands() {
-    const rest = new REST({version: '10'}).setToken(process.env.DISCORD_TOKEN);
+    const rest = new REST({version: DISCORD_API_VERSION}).setToken(process.env.DISCORD_TOKEN);
 
     try {
         console.log('Starting to register commands');
@@ -357,34 +523,55 @@ async function registerCommands() {
             Routes.applicationCommands(process.env.CLIENT_ID),
             { body: commands}
         )
-        console.log('Succesfully registered my commands');
+        console.log('Successfully registered my commands');
     } catch (error) {
         console.error('Error registering commands:', error);
     }
 }
 
-// On ready
+// ============================================================================
+// BOT EVENT HANDLERS
+// ============================================================================
+
+/**
+ * Bot ready event - fires once when the bot successfully connects to Discord
+ * Initializes database, registers commands, sets up cron schedule, and checks birthdays
+ */
 client.once('ready', () => {
     console.log(`I am online! Logged in as ${client.user.tag}`);
+
+    // Initialize the database and create tables if needed
     initializeDB();
+
+    // Register slash commands with Discord
     registerCommands();
 
-    cron.schedule('0 9 * * *', () => {
+    // Schedule daily birthday checks
+    cron.schedule(DAILY_BIRTHDAY_CHECK_SCHEDULE, () => {
         console.log('Checking daily birthdays!');
         checkBirthdays();
     })
 
+    // Immediately check for birthdays on bot startup
     console.log('Checking for birthdays on startup!');
     checkBirthdays();
 });
 
+/**
+ * Interaction create event - handles all slash command interactions
+ * Routes commands to their respective handlers
+ */
 client.on('interactionCreate', async interaction =>{
     if(!interaction.isChatInputCommand()) return;
 
     const commandName = interaction.commandName;
+
+    // ========================================================================
+    // HELLO COMMAND
+    // ========================================================================
     if(commandName == 'hello') {
         const embed = new EmbedBuilder()
-            .setColor(0x00AE86)
+            .setColor(EMBED_COLORS.INFO)
             .setTitle('Hello!')
             .setDescription('I am the bot!')
             .setTimestamp()
@@ -392,28 +579,33 @@ client.on('interactionCreate', async interaction =>{
             await interaction.reply({embeds: [embed]});
     }
 
-        if(commandName == 'birthday') {
-            const subcommand = interaction.options.getSubcommand();
+    // ========================================================================
+    // BIRTHDAY COMMAND
+    // ========================================================================
+    if(commandName == 'birthday') {
+        const subcommand = interaction.options.getSubcommand();
 
-            if(subcommand == 'setup'){
-                // Ensure command is used in a guild
-                if(!interaction.guildId){
-                    await interaction.reply({
-                        content: 'This command can only be used in a server.',
-                        ephemeral: true
-                    });
-                    return;
-                }
+        // ====================================================================
+        // BIRTHDAY SETUP SUBCOMMAND
+        // ====================================================================
+        if(subcommand == 'setup'){
+            // Ensure command is used in a guild
+            if(!interaction.guildId){
+                await interaction.reply({
+                    content: 'This command can only be used in a server.',
+                    ephemeral: true
+                });
+                return;
+            }
 
-                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-                if(!isAdmin){
-                    await interaction.reply({
-                        content: 'You are not an administrator, and thus can not set this up',
-                        ephemeral: true
-                    });
-                    return
-                }
+            // Check for admin permissions
+            if(!isServerAdmin(interaction.memberPermissions)){
+                await interaction.reply({
+                    content: 'You are not an administrator, and thus cannot set this up',
+                    ephemeral: true
+                });
+                return
+            }
                 try{
                     const channel = interaction.options.getChannel('channel');
                     const role = interaction.options.getRole('role');
@@ -478,17 +670,17 @@ client.on('interactionCreate', async interaction =>{
                     const serverID = interaction.guildId;
                     const serverName = guild.name;
 
-                    //save to db
+                    // Save configuration to database
                     saveServerConfig(serverID, serverName, channel.id, role.id);
 
                     const setupEmbed = new EmbedBuilder()
-                        .setColor(0x00FF00)
+                        .setColor(EMBED_COLORS.SUCCESS)
                         .setTitle('Birthday Notifications configured')
                         .setDescription('Birthday notifications have been configured')
                         .addFields(
                             {name: 'Birthday Channel', value: `<#${channel.id}>`, inline:true},
                             {name: 'Role', value: `<@&${role.id}>`, inline:true},
-                            {name: 'Next Check', value: 'Everyday at 9:00 AM JST', inline:false}
+                            {name: 'Next Check', value: BIRTHDAY_CHECK_TIME_DISPLAY, inline:false}
                         )
                         .setFooter({text: "Users can now add their birthday with /birthday add"})
                         .setTimestamp();
@@ -507,34 +699,35 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
 
+            // ====================================================================
+            // BIRTHDAY ADD SUBCOMMAND
+            // ====================================================================
             if(subcommand == 'add') {
                 try{
                     const dateInput = interaction.options.getString('date');
                     const userID = interaction.user.id;
                     const username = interaction.user.username;
 
-                    //validate bday
+                    // Validate birthday date format
                     const dateResult = parseAndValidateDate(dateInput);
 
                     if(!dateResult.isValid) {
                         const errorEmbed = new EmbedBuilder()
-                            .setColor(0xFF0000)
+                            .setColor(EMBED_COLORS.ERROR)
                             .setTitle('Date is invalid')
                             .setDescription(dateResult.error)
                             .addFields(
-
-                        
                             { name: 'Examples', value: '• 12/25 (December 25th)\n• 7/3 (July 3rd)\n• 04/20 (April 20th)' }
                             );
                         await interaction.reply({embeds: [errorEmbed], ephemeral: true});
                         return;
                     }
 
-                    //save to db
+                    // Save birthday to database
                     saveUserBirthday(userID, username, dateResult.month, dateResult.day);
-            
+
                     const successEmbed = new EmbedBuilder()
-                        .setColor(0x00FF00)
+                        .setColor(EMBED_COLORS.SUCCESS)
                         .setTitle('Birthday added!')
                         .setDescription(`Your birthday is now saved as ${dateResult.month}/${dateResult.day}`)
                         .setFooter({text: `Detected format ${dateResult.format}`})
@@ -550,7 +743,9 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
 
-            //list all bdays
+            // ====================================================================
+            // BIRTHDAY LIST SUBCOMMAND
+            // ====================================================================
             if(subcommand == 'list') {
                 // Ensure command is used in a guild
                 if(!interaction.guildId){
@@ -561,10 +756,8 @@ client.on('interactionCreate', async interaction =>{
                     return;
                 }
 
-                //admin check
-                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-                if(!isAdmin){
+                // Check for admin permissions
+                if(!isServerAdmin(interaction.memberPermissions)){
                     await interaction.reply({
                         content: 'You are not an admin',
                         ephemeral: true
@@ -586,12 +779,12 @@ client.on('interactionCreate', async interaction =>{
                         .join('\n');
 
                     const embed = new EmbedBuilder()
-                        .setColor(0x00AE86)
+                        .setColor(EMBED_COLORS.INFO)
                         .setTitle('All registered Birthdays')
                         .setDescription(birthdayList)
                         .setFooter({text: `Total: ${birthdays.length} birthdays`})
                         .setTimestamp();
-                
+
                         await interaction.reply({embeds: [embed], ephemeral:true});
                 } catch(error) {
                     console.error('Error in birthday list:', error);
@@ -602,7 +795,9 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
 
-            //manual check of birthdays
+            // ====================================================================
+            // BIRTHDAY CHECK SUBCOMMAND
+            // ====================================================================
             if(subcommand == 'check'){
                 // Ensure command is used in a guild
                 if(!interaction.guildId){
@@ -613,9 +808,8 @@ client.on('interactionCreate', async interaction =>{
                     return;
                 }
 
-                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-                if(!isAdmin) {
+                // Check for admin permissions
+                if(!isServerAdmin(interaction.memberPermissions)) {
                     await interaction.reply({
                         content: 'You are not an admin',
                         ephemeral: true
@@ -626,7 +820,9 @@ client.on('interactionCreate', async interaction =>{
                 await checkBirthdays();
             }
 
-            //check bday from dbase
+            // ====================================================================
+            // BIRTHDAY SHOW SUBCOMMAND
+            // ====================================================================
             if(subcommand == 'show') {
                 try{
                     const userID = interaction.user.id;
@@ -634,7 +830,7 @@ client.on('interactionCreate', async interaction =>{
 
                     if(birthday){
                         const embed = new EmbedBuilder()
-                            .setColor(0x00AE86)
+                            .setColor(EMBED_COLORS.INFO)
                             .setTitle('Your birthday')
                             .setDescription(`Your birthday is ${birthday.month}/${birthday.day}`)
                             .setTimestamp();
@@ -642,7 +838,7 @@ client.on('interactionCreate', async interaction =>{
                         await interaction.reply({embeds: [embed]});
                     } else {
                         const embed = new EmbedBuilder()
-                            .setColor(0xFFAA00)
+                            .setColor(EMBED_COLORS.WARNING)
                             .setTitle('No Birthday found')
                             .setDescription('You may have not set your birthday')
                             .addFields(
@@ -651,7 +847,7 @@ client.on('interactionCreate', async interaction =>{
                         await interaction.reply({embeds: [embed], ephemeral: true});
                     }
                 } catch (error) {
-                    console.error('Error in retrieiving your birthday:', error);
+                    console.error('Error in retrieving your birthday:', error);
                     await interaction.reply({
                         content: 'We could not retrieve your birthday at the moment',
                         ephemeral: true
@@ -659,7 +855,9 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
 
-            //remove bday from database
+            // ====================================================================
+            // BIRTHDAY REMOVE SUBCOMMAND
+            // ====================================================================
             if(subcommand == 'remove'){
                 try{
                     const userID = interaction.user.id;
@@ -681,6 +879,10 @@ client.on('interactionCreate', async interaction =>{
                     });
                 }
             }
+
+            // ====================================================================
+            // BIRTHDAY STATS SUBCOMMAND
+            // ====================================================================
             if(subcommand == "stats") {
                 // Ensure command is used in a guild
                 if(!interaction.guildId){
@@ -691,9 +893,8 @@ client.on('interactionCreate', async interaction =>{
                     return;
                 }
 
-                const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                                interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
-                if(!isAdmin) {
+                // Check for admin permissions
+                if(!isServerAdmin(interaction.memberPermissions)) {
                     await interaction.reply({
                             content: 'You are not an admin',
                             ephemeral: true
@@ -701,9 +902,9 @@ client.on('interactionCreate', async interaction =>{
                     return;
                 }
                 try{
-                    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+                    const totalUsers = birthdayDatabase.prepare('SELECT COUNT(*) as count FROM users').get().count;
 
-                    const monthStats = db.prepare(`
+                    const monthStats = birthdayDatabase.prepare(`
                         SELECT month, COUNT(*) as count
                         FROM users
                         GROUP BY month
@@ -711,13 +912,13 @@ client.on('interactionCreate', async interaction =>{
                         LIMIT 3
                     `).all();
 
-                    const recentUsers = db.prepare(`
+                    const recentUsers = birthdayDatabase.prepare(`
                         SELECT COUNT(*) as count
                         FROM users
                         WHERE DATE(created_at) >= DATE('now', '-30 days')
                     `).get().count;
 
-                    const totalServers = db.prepare('SELECT COUNT(*) as count FROM servers').get().count;
+                    const totalServers = birthdayDatabase.prepare('SELECT COUNT(*) as count FROM servers').get().count;
 
                     // Get all configured servers and check if bot is in them
                     const configuredServers = getAllServerConfigs();
@@ -727,14 +928,12 @@ client.on('interactionCreate', async interaction =>{
                         return `${status} ${server.server_name}`;
                     }).join('\n') || 'No servers configured';
 
-                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
                     const topMonths = monthStats
-                        .map(stat => `${monthNames[stat.month - 1]}: ${stat.count}`)
+                        .map(stat => `${MONTH_NAMES[stat.month - 1]}: ${stat.count}`)
                         .join('\n') || 'NO DATA';
 
                     const embed = new EmbedBuilder()
-                        .setColor(0x00AE86)
+                        .setColor(EMBED_COLORS.INFO)
                         .setTitle('Birthday statistics')
                         .addFields(
                             {name: 'Total users', value: totalUsers.toString(), inline: true},
@@ -757,17 +956,26 @@ client.on('interactionCreate', async interaction =>{
         }
     });
 
-//shutdown db
+// ============================================================================
+// SHUTDOWN HANDLER
+// ============================================================================
+
+/**
+ * Graceful shutdown handler - closes database connection before exiting
+ * Triggered by SIGINT (Ctrl+C)
+ */
 process.on('SIGINT', () =>{
-    console.log('db shutting down');
-    if(db) {
-        db.close();
-        console.log('db connection shut down');
+    console.log('Database shutting down');
+    if(birthdayDatabase) {
+        birthdayDatabase.close();
+        console.log('Database connection shut down');
     }
     process.exit(0);
 });
 
+// ============================================================================
+// BOT LOGIN
+// ============================================================================
 
-
-// Connect to discord
+// Connect the bot to Discord
 client.login(process.env.DISCORD_TOKEN);

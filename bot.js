@@ -537,24 +537,49 @@ async function registerCommands() {
  * Bot ready event - fires once when the bot successfully connects to Discord
  * Initializes database, registers commands, sets up cron schedule, and checks birthdays
  */
-client.once('ready', () => {
-    console.log(`I am online! Logged in as ${client.user.tag}`);
+client.once('ready', async () => {
+    try {
+        console.log(`✅ I am online! Logged in as ${client.user.tag}`);
 
-    // Initialize the database and create tables if needed
-    initializeDB();
+        // Initialize the database and create tables if needed
+        console.log('📊 Initializing database...');
+        initializeDB();
 
-    // Register slash commands with Discord
-    registerCommands();
+        // Register slash commands with Discord
+        console.log('🔧 Registering commands...');
+        await registerCommands();
 
-    // Schedule daily birthday checks
-    cron.schedule(DAILY_BIRTHDAY_CHECK_SCHEDULE, () => {
-        console.log('Checking daily birthdays!');
-        checkBirthdays();
-    })
+        // Schedule daily birthday checks
+        console.log('⏰ Setting up daily birthday check schedule...');
+        cron.schedule(DAILY_BIRTHDAY_CHECK_SCHEDULE, () => {
+            console.log('🎂 Running scheduled birthday check...');
+            checkBirthdays().catch(error => {
+                console.error('❌ Error in scheduled birthday check:', error);
+            });
+        })
 
-    // Immediately check for birthdays on bot startup
-    console.log('Checking for birthdays on startup!');
-    checkBirthdays();
+        // Immediately check for birthdays on bot startup
+        console.log('🎂 Checking for birthdays on startup...');
+        await checkBirthdays();
+
+        console.log('🚀 Bot is fully ready and operational!');
+    } catch (error) {
+        console.error('❌ Error during bot startup:', error);
+    }
+});
+
+/**
+ * Disconnect event - fires when the bot loses connection to Discord
+ */
+client.on('disconnect', () => {
+    console.warn('⚠️  Bot disconnected from Discord');
+});
+
+/**
+ * Reconnecting event - fires when the bot attempts to reconnect
+ */
+client.on('reconnecting', () => {
+    console.log('🔄 Attempting to reconnect to Discord...');
 });
 
 /**
@@ -974,8 +999,57 @@ process.on('SIGINT', () =>{
 });
 
 // ============================================================================
+// ERROR HANDLERS
+// ============================================================================
+
+/**
+ * Handle unhandled promise rejections
+ * Prevents the bot from crashing when async operations fail
+ */
+process.on('unhandledRejection', (error) => {
+    console.error('❌ Unhandled promise rejection:', error);
+});
+
+/**
+ * Handle uncaught exceptions
+ * Logs the error but allows the bot to continue running
+ */
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught exception:', error);
+});
+
+/**
+ * Handle Discord client errors
+ * Prevents crashes from Discord API issues
+ */
+client.on('error', (error) => {
+    console.error('❌ Discord client error:', error);
+});
+
+/**
+ * Handle Discord warnings
+ */
+client.on('warn', (warning) => {
+    console.warn('⚠️  Discord warning:', warning);
+});
+
+/**
+ * Handle Discord debug messages (optional, comment out if too verbose)
+ */
+// client.on('debug', (info) => {
+//     console.log('🔍 Discord debug:', info);
+// });
+
+// ============================================================================
 // BOT LOGIN
 // ============================================================================
 
 // Connect the bot to Discord
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN)
+    .then(() => {
+        console.log('✅ Successfully logged in to Discord');
+    })
+    .catch((error) => {
+        console.error('❌ Failed to login to Discord:', error);
+        process.exit(1);
+    });

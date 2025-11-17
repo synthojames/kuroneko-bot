@@ -14,6 +14,7 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, // Can see what servers its in
         GatewayIntentBits.GuildMessages, //Can see messages in server
+        GatewayIntentBits.GuildMembers, // See server members
     ]
 });
 
@@ -392,12 +393,11 @@ client.on('interactionCreate', async interaction =>{
 
             if(subcommand == 'setup'){
                 // Ensure command is used in a guild
-                if(!interaction.guild){
+                if(!interaction.guildId){
                     await interaction.reply({
-                        content: 'Bot configuration error: Cannot access guild information. Please ensure the bot has proper permissions and try re-inviting the bot.',
+                        content: 'This command can only be used in a server.',
                         ephemeral: true
                     });
-                    console.error('Guild is null. GuildId:', interaction.guildId, 'InGuild:', interaction.inGuild());
                     return;
                 }
 
@@ -430,8 +430,9 @@ client.on('interactionCreate', async interaction =>{
                         return;
                     }
 
-                    const serverID = interaction.guild.id;
-                    const serverName = interaction.guild.name;
+                    // Use guildId (always available) and get name from channel's guild or use fallback
+                    const serverID = interaction.guildId;
+                    const serverName = channel.guild?.name || interaction.guild?.name || 'Unknown Server';
 
                     //save to db
                     saveServerConfig(serverID, serverName, channel.id, role.id);
@@ -506,7 +507,7 @@ client.on('interactionCreate', async interaction =>{
             //list all bdays
             if(subcommand == 'list') {
                 // Ensure command is used in a guild
-                if(!interaction.guild){
+                if(!interaction.guildId){
                     await interaction.reply({
                         content: 'This command can only be used in a server',
                         ephemeral: true
@@ -558,7 +559,7 @@ client.on('interactionCreate', async interaction =>{
             //manual check of birthdays
             if(subcommand == 'check'){
                 // Ensure command is used in a guild
-                if(!interaction.guild){
+                if(!interaction.guildId){
                     await interaction.reply({
                         content: 'This command can only be used in a server',
                         ephemeral: true
@@ -636,7 +637,7 @@ client.on('interactionCreate', async interaction =>{
             }
             if(subcommand == "stats") {
                 // Ensure command is used in a guild
-                if(!interaction.guild){
+                if(!interaction.guildId){
                     await interaction.reply({
                         content: 'This command can only be used in a server',
                         ephemeral: true

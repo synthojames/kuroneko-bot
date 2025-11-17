@@ -434,9 +434,41 @@ client.on('interactionCreate', async interaction =>{
                         return;
                     }
 
-                    // Use guildId (always available) and get name from channel's guild or use fallback
+                    // Get the guild to check permissions
+                    const guild = await client.guilds.fetch(interaction.guildId);
+                    const fullChannel = await guild.channels.fetch(channel.id);
+
+                    // Check bot permissions in the channel
+                    const botMember = await guild.members.fetchMe();
+                    const permissions = fullChannel.permissionsFor(botMember);
+
+                    if (!permissions.has(PermissionFlagsBits.ViewChannel)) {
+                        await interaction.reply({
+                            content: '❌ I don\'t have permission to view that channel. Please give me the "View Channel" permission and try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
+                    if (!permissions.has(PermissionFlagsBits.SendMessages)) {
+                        await interaction.reply({
+                            content: '❌ I don\'t have permission to send messages in that channel. Please give me the "Send Messages" permission and try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
+                    if (!permissions.has(PermissionFlagsBits.EmbedLinks)) {
+                        await interaction.reply({
+                            content: '❌ I don\'t have permission to embed links in that channel. Please give me the "Embed Links" permission and try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
+                    // Use guildId (always available) and get name from guild
                     const serverID = interaction.guildId;
-                    const serverName = channel.guild?.name || interaction.guild?.name || 'Unknown Server';
+                    const serverName = guild.name;
 
                     //save to db
                     saveServerConfig(serverID, serverName, channel.id, role.id);

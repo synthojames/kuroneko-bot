@@ -17,6 +17,8 @@ const client = new Client({
     ]
 });
 
+//test
+
 //DATABASE SETUP
 const DB_FILE = './birthdays.db';
 let db;

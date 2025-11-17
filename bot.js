@@ -391,26 +391,14 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
-                // Debug logging
-                console.log('Setup command triggered');
-                console.log('interaction.guild:', interaction.guild);
-                console.log('interaction.guildId:', interaction.guildId);
-                console.log('interaction.inGuild():', interaction.inGuild());
-                console.log('interaction.member:', interaction.member);
-                console.log('interaction.memberPermissions:', interaction.memberPermissions);
-
                 // Ensure command is used in a guild
-                if(!interaction.guildId){
+                if(!interaction.guild){
                     await interaction.reply({
-                        content: 'This command can only be used in a server',
+                        content: 'Bot configuration error: Cannot access guild information. Please ensure the bot has proper permissions and try re-inviting the bot.',
                         ephemeral: true
                     });
+                    console.error('Guild is null. GuildId:', interaction.guildId, 'InGuild:', interaction.inGuild());
                     return;
-                }
-
-                // Fetch guild if not cached
-                if(!interaction.guild){
-                    await interaction.client.guilds.fetch(interaction.guildId);
                 }
 
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||

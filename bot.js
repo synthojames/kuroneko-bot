@@ -17,8 +17,6 @@ const client = new Client({
     ]
 });
 
-//test
-
 //DATABASE SETUP
 const DB_FILE = './birthdays.db';
 let db;
@@ -393,7 +391,9 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
-                if(!interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)){
+                const isAdmin = interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+                                interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
+                if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an administrator, and thus can not set this up',
                         ephemeral: true
@@ -479,7 +479,9 @@ client.on('interactionCreate', async interaction =>{
             //list all bdays
             if(subcommand == 'list') {
                 //admin check
-                if(!interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)){
+                const isAdmin = interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+                                interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
+                if(!isAdmin){
                     await interaction.reply({
                         content: 'You are not an admin',
                         ephemeral: true
@@ -519,7 +521,9 @@ client.on('interactionCreate', async interaction =>{
 
             //manual check of birthdays
             if(subcommand == 'check'){
-                if(!interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                const isAdmin = interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+                                interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
+                if(!isAdmin) {
                     await interaction.reply({
                         content: 'You are not an admin',
                         ephemeral: true
@@ -586,7 +590,9 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
             if(subcommand == "stats") {
-                if(!interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                const isAdmin = interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+                                interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
+                if(!isAdmin) {
                     await interaction.reply({
                             content: 'You are not an admin',
                             ephemeral: true

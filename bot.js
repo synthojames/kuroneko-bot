@@ -222,8 +222,12 @@ async function checkBirthdays(){
 
             //Get all servers
             const servers = getAllServerConfigs();
+            console.log(`Found ${servers.length} configured servers in database`);
+            console.log(`Bot is currently in ${client.guilds.cache.size} servers`);
+
             //send messages
             for(const server of servers) {
+                console.log(`Processing server: ${server.server_name} (ID: ${server.id})`);
                 await celebrateBirthday(server.id, server, birthdayPeople);
             }
         } else {
@@ -240,17 +244,17 @@ async function celebrateBirthday(serverID, serverSettings, birthdayPeople){
         //get the discord server
         const guild = client.guilds.cache.get(serverID);
         if (!guild) {
-            console.log(`${serverID} not found`);
+            console.log(`⚠️  Server "${serverSettings.server_name}" (ID: ${serverID}) not found - bot may have been removed from this server`);
             return;
         }
         const channel = guild.channels.cache.get(serverSettings.channel_id);
         if(!channel) {
-            console.log(`${serverSettings.channel_id} not found in ${guild.name}`);
+            console.log(`⚠️  Channel ID ${serverSettings.channel_id} not found in ${guild.name} - channel may have been deleted`);
             return;
         }
         const role = guild.roles.cache.get(serverSettings.role_id);
         if (!role){
-            console.log(`${serverSettings.role_id} in ${guild.name} not found`);
+            console.log(`⚠️  Role ID ${serverSettings.role_id} not found in ${guild.name} - role may have been deleted`);
             return;
         }
 
@@ -271,7 +275,7 @@ async function celebrateBirthday(serverID, serverSettings, birthdayPeople){
                 embeds: [birthdayEmbed]
             });
 
-            console.log(`Sent birthday message for ${person.username} to ${guild.name}/#${channel.name}`);
+            console.log(`✅ Sent birthday message for ${person.username} to ${guild.name}/#${channel.name}`);
         }
 
     } catch (error) {
@@ -675,6 +679,14 @@ client.on('interactionCreate', async interaction =>{
 
                     const totalServers = db.prepare('SELECT COUNT(*) as count FROM servers').get().count;
 
+                    // Get all configured servers and check if bot is in them
+                    const configuredServers = getAllServerConfigs();
+                    const serverStatus = configuredServers.map(server => {
+                        const guild = client.guilds.cache.get(server.id);
+                        const status = guild ? '✅' : '❌';
+                        return `${status} ${server.server_name}`;
+                    }).join('\n') || 'No servers configured';
+
                     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
                     const topMonths = monthStats
@@ -688,7 +700,8 @@ client.on('interactionCreate', async interaction =>{
                             {name: 'Total users', value: totalUsers.toString(), inline: true},
                             {name: 'Configured servers', value: totalServers.toString(), inline: true},
                             {name: 'Recently registered', value: recentUsers.toString(), inline:true},
-                            {name: 'Popular months', value: topMonths, inline: false}
+                            {name: 'Popular months', value: topMonths, inline: false},
+                            {name: 'Server Status (✅ = bot present)', value: serverStatus, inline: false}
                         )
                         .setTimestamp();
 

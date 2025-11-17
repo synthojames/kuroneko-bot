@@ -434,8 +434,16 @@ client.on('interactionCreate', async interaction =>{
                         return;
                     }
 
-                    // Get the guild to check permissions
-                    const guild = await client.guilds.fetch(interaction.guildId);
+                    // Get the guild from the interaction (already cached)
+                    const guild = interaction.guild;
+                    if (!guild) {
+                        await interaction.reply({
+                            content: 'Unable to access server information. Please try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
                     const fullChannel = await guild.channels.fetch(channel.id);
 
                     // Check bot permissions in the channel

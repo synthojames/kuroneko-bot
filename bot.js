@@ -391,6 +391,15 @@ client.on('interactionCreate', async interaction =>{
             const subcommand = interaction.options.getSubcommand();
 
             if(subcommand == 'setup'){
+                // Ensure command is used in a guild
+                if(!interaction.guild){
+                    await interaction.reply({
+                        content: 'This command can only be used in a server',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
                                 interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin){
@@ -403,6 +412,23 @@ client.on('interactionCreate', async interaction =>{
                 try{
                     const channel = interaction.options.getChannel('channel');
                     const role = interaction.options.getRole('role');
+
+                    // Validate channel and role
+                    if(!channel){
+                        await interaction.reply({
+                            content: 'Invalid channel selected. Please try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                    if(!role){
+                        await interaction.reply({
+                            content: 'Invalid role selected. Please try again.',
+                            ephemeral: true
+                        });
+                        return;
+                    }
+
                     const serverID = interaction.guild.id;
                     const serverName = interaction.guild.name;
 
@@ -478,6 +504,15 @@ client.on('interactionCreate', async interaction =>{
 
             //list all bdays
             if(subcommand == 'list') {
+                // Ensure command is used in a guild
+                if(!interaction.guild){
+                    await interaction.reply({
+                        content: 'This command can only be used in a server',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
                 //admin check
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
                                 interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
@@ -521,6 +556,15 @@ client.on('interactionCreate', async interaction =>{
 
             //manual check of birthdays
             if(subcommand == 'check'){
+                // Ensure command is used in a guild
+                if(!interaction.guild){
+                    await interaction.reply({
+                        content: 'This command can only be used in a server',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
                                 interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin) {
@@ -590,6 +634,15 @@ client.on('interactionCreate', async interaction =>{
                 }
             }
             if(subcommand == "stats") {
+                // Ensure command is used in a guild
+                if(!interaction.guild){
+                    await interaction.reply({
+                        content: 'This command can only be used in a server',
+                        ephemeral: true
+                    });
+                    return;
+                }
+
                 const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
                                 interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
                 if(!isAdmin) {

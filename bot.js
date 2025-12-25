@@ -439,12 +439,23 @@ async function getUsdToJpyRate(){
         const data = await response.json();
 
         const jpyRate = data.rates.JPY;
-        const lastUpdated = data.date;
+        const lastUpdatedTimeStamp = data.time_last_updated;
+        const lastUpdatedDate = new Date(LastUpdatedTimestamp * 1000);
+
+        const formattedDateTime = lastUpdatedDate.toLocaleDateString('en-US', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+        });
 
         return{
             success: true,
             rate: jpyRate,
-            date: lastUpdated
+            dateTime: formattedDateTime
         };
     } catch(error) {
         console.error('Error fetching exchange rate:', error);
@@ -663,13 +674,13 @@ client.on('interactionCreate', async interaction =>{
                 .setDescription('The current exchange rate between USD and JPY')
                 .addFields(
                     {name: '1 USD is equal to', value: `${result.rate.toFixed(2)} JPY`, inline: true},
-                    {name: 'Time pulled', value: result.date, inline: true}
+                    {name: 'Time pulled', value: result.dateTime, inline: true}
                 )
                 .setFooter({text: 'Data provided by ExchangeRate-API'})
                 .setTimestamp();
 
             await interaction.editReply({embeds: [exchangeEmbed]});
-            
+
         } catch(error) {
             console.error('Error in exchange command:', error);
 

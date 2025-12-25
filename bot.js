@@ -440,7 +440,7 @@ async function getUsdToJpyRate(){
 
         const jpyRate = data.rates.JPY;
         const lastUpdatedTimeStamp = data.time_last_updated;
-        const lastUpdatedDate = new Date(LastUpdatedTimestamp * 1000);
+        const lastUpdatedDate = new Date(lastUpdatedTimeStamp * 1000);
 
         const formattedDateTime = lastUpdatedDate.toLocaleDateString('en-US', {
             timeZone: 'Asia/Tokyo',

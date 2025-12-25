@@ -426,6 +426,34 @@ async function celebrateBirthday(serverID, serverSettings, usersWithBirthdaysTod
         console.error(`Error sending messages to ${serverID}:`, error);
     }
 }
+// ============================================================================
+// EXCHANGE RATE FUNCTIONS
+// ============================================================================
+
+async function getUsdToJpyRate(){
+    try{
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        if(!response.ok){
+            throw new Error('API returned status ${response.status}')
+        }
+        const data = await response.json();
+
+        const jpyRate = data.rates.JPY;
+        const lastUpdated = data.date;
+
+        return{
+            success: true,
+            rate: jpyRate,
+            date: lastUpdated
+        };
+    } catch(error) {
+        console.error('Error fetching exchange rate:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -450,6 +478,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('hello')
         .setDescription('Bot says hello to you!'),
+    
+    new SlashCommandBuilder()
+        .setName('exchange')
+        .setDescription('Convert between USD and JPY'),
 
     new SlashCommandBuilder()
         .setName('birthday')
@@ -602,6 +634,56 @@ client.on('interactionCreate', async interaction =>{
             .setTimestamp()
 
             await interaction.reply({embeds: [embed]});
+    }
+    // ========================================================================
+    // EXCHANGE COMMAND
+    // ========================================================================
+    if(commandName == 'exchange'){
+        try{
+            await interaction.deferReply();
+            
+            const result = await getUsdToJpyRate();
+
+            if(!result.success) {
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(EMBED_COLORS.ERROR)
+                    .setTitle('Error fetching exchange rate')
+                    .setDescription('The lookup failed, try again later.')
+                    .addFields(
+                        {name: 'Error Details', value: result.error}
+                    )
+                    .setTimestamp();
+
+                await interaction.editReply({embeds: [errorEmbed]});
+                return;
+            }
+            const exchangeEmbed = new EmbedBuilder()
+                .setColor(EMBED_COLORS.SUCCESS)
+                .setTitle('USD TO JPY Exchange Rate')
+                .setDescription('The current exchange rate between USD and JPY')
+                .addFields(
+                    {name: '1 USD is equal to', value: `${result.rate.toFixed(2)} JPY`, inline: true},
+                    {name: 'Time pulled', value: result.date, inline: true}
+                )
+                .setFooter({text: 'Data provided by ExchangeRate-API'})
+                .setTimestamp();
+
+            await interaction.editReply({embeds: [exchangeEmbed]});
+            
+        } catch(error) {
+            console.error('Error in exchange command:', error);
+
+            if(!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: 'Something went wrong, please try again.',
+                    ephemeral: true
+                });
+            } else{
+                await interaction.editReply({
+                    content: 'SOmething went wrong, please try again later'
+                });
+            }
+        }
     }
 
     // ========================================================================
